@@ -1,4 +1,6 @@
-#!/bin/bash
+# !/bin/bash
+# Add this as a new cronjob (crontab -e):
+# */1 * * * * /usr/local/bin/upload_wazuh_alerts.sh
 
 ALERTS_FILE="/var/ossec/logs/alerts/alerts.json"
 POSITION_FILE="/tmp/alerts.position"
@@ -39,5 +41,6 @@ echo "$(date -u) Uploaded delta: $UPLOAD_KEY" >> $LOG_FILE
 
 # Update position
 echo "$FILE_SIZE" > "$POSITION_FILE"
+
 
 exit 0
