@@ -1,0 +1,43 @@
+#!/bin/bash
+
+ALERTS_FILE="/var/ossec/logs/alerts/alerts.json"
+POSITION_FILE="/tmp/alerts.position"
+S3_BUCKET="enter bucket name"
+S3_KEY_PREFIX="path to where alerts should go"
+LOG_FILE="/var/log/wazuh-alert-upload.log"
+
+# Create the position file if it does not exist
+if [ ! -f "$POSITION_FILE" ]; then
+    echo 0 > "$POSITION_FILE"
+fi
+
+LAST_POS=$(cat "$POSITION_FILE")
+FILE_SIZE=$(stat -c%s "$ALERTS_FILE")
+
+if [ "$FILE_SIZE" -lt "$LAST_POS" ]; then
+    echo "$(date -u) File rotated or truncated. Resetting position." >> $LOG_FILE
+    LAST_POS=0
+fi
+
+NEW_BYTES=$((FILE_SIZE - LAST_POS))
+
+if [ "$NEW_BYTES" -le 0 ]; then
+    echo "$(date -u) No new alerts." >> $LOG_FILE
+    exit 0
+fi
+
+echo "$(date -u) Reading $NEW_BYTES new bytes." >> $LOG_FILE
+
+# Extract only new alerts
+tail -c +"$((LAST_POS + 1))" "$ALERTS_FILE" > /tmp/new_alerts.json
+
+# Upload *JUST the new alerts* to S3
+UPLOAD_KEY="$S3_KEY_PREFIX/alerts_updated_at_$(date -u +%s).json"
+aws s3 cp /tmp/new_alerts.json "s3://$S3_BUCKET/$UPLOAD_KEY" --only-show-errors --sse AES256
+
+echo "$(date -u) Uploaded delta: $UPLOAD_KEY" >> $LOG_FILE
+
+# Update position
+echo "$FILE_SIZE" > "$POSITION_FILE"
+
+exit 0
